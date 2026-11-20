@@ -14,6 +14,243 @@ puis envoie ce PDF par email.
 > inscriptions.
 
 ------------------------------------------------------------------------
+# Catalogue initial des achievements — Metal
+
+## Objectif
+
+Les badges de Metal ne doivent pas simplement récompenser le volume d'activité GitHub. Ils doivent représenter des **objectifs techniques concrets**, validés à partir d'éléments observables dans les dépôts et l'activité GitHub d'un développeur.
+
+Pour chaque achievement, Metal définit :
+- une catégorie technique ;
+- un objectif compréhensible par l'utilisateur ;
+- des critères de détection vérifiables ;
+- les preuves utilisées pour justifier l'attribution du badge.
+
+Les critères présentés ci-dessous constituent une première proposition pour la V1. Ils pourront être affinés à mesure que le moteur d'analyse évoluera.
+
+---
+
+## 1. Catégorie CI/CD & Automation
+
+### First CI/CD
+
+**Niveau :** Starter  
+**Objectif :** Réussir sa première exécution de workflow GitHub Actions.
+
+**Critères de détection :**
+
+1. Un dépôt éligible contient au moins un workflow GitHub Actions dans le répertoire `.github/workflows/`.
+2. Le workflow contient au moins un job.
+3. Au moins une exécution du workflow est terminée avec `status = completed` et `conclusion = success`.
+
+Metal récupère les informations nécessaires via la GitHub Actions API.
+
+**Preuves possibles :**
+- identifiant du dépôt ;
+- identifiant du workflow ;
+- identifiant de l'exécution réussie ;
+- date de l'exécution.
+
+### CI/CD Explorer
+
+**Niveau :** Advanced  
+**Objectif :** Créer et exécuter avec succès au moins trois workflows CI/CD distincts.
+
+**Critères de détection :**
+
+1. Le développeur possède au moins trois workflows distincts dans un ou plusieurs dépôts éligibles.
+2. Chaque workflow a au moins une exécution réussie.
+3. Les trois workflows sont distincts : relancer plusieurs fois un même workflow ne compte que comme un seul workflow.
+
+**Pourquoi compter les workflows plutôt que les exécutions ?**
+
+Relancer trois fois le même workflow ne démontre pas nécessairement l'exploration de plusieurs automatisations. Ce badge valorise la diversité des pipelines créés et exécutés.
+
+**Preuves possibles :**
+- identifiants des dépôts ;
+- identifiants des workflows ;
+- identifiants d'au moins une exécution réussie par workflow.
+
+---
+
+## 2. Catégorie Distributed Systems & Architecture
+
+### Microservices Builder
+
+**Niveau :** Advanced  
+**Objectif :** Construire une architecture comportant au moins trois services applicatifs identifiables.
+
+Détecter trois dossiers dans un dépôt ne suffit pas à prouver l'existence de microservices. Une structure comme celle-ci peut tout aussi bien correspondre à trois modules d'un monolithe :
+
+```text
+my-project/
+├── user/
+├── product/
+└── order/
+```
+
+Pour la V1, Metal utilisera des indices structurels plus concrets.
+
+**Critères de détection proposés :**
+
+1. Le dépôt éligible contient un fichier `docker-compose.yml` ou `compose.yaml`.
+2. Le fichier déclare au moins trois services applicatifs distincts.
+3. Chaque service comptabilisé possède une configuration de construction ou de déploiement identifiable, idéalement son propre `Dockerfile`.
+4. Les services d'infrastructure — par exemple une base de données, Redis ou un broker — ne sont pas comptabilisés comme des services applicatifs.
+5. Le développeur doit avoir une contribution identifiable au dépôt selon les règles d'éligibilité de Metal.
+
+**Exemple :**
+
+```yaml
+services:
+  user-service:
+    build: ./user-service
+
+  product-service:
+    build: ./product-service
+
+  order-service:
+    build: ./order-service
+```
+
+Metal peut analyser le fichier Compose, identifier les services déclarés et vérifier les chemins de construction ainsi que la présence des Dockerfiles correspondants.
+
+**Limite de détection :**
+
+Ces critères permettent de détecter une architecture déclarée comme plusieurs services applicatifs déployables séparément. Ils ne prouvent pas, à eux seuls, que le système respecte tous les principes architecturaux des microservices : autonomie réelle, données indépendantes, faible couplage ou déploiement indépendant.
+
+Le badge doit donc être compris comme une détection structurelle de V1. Une analyse architecturale plus approfondie pourra être ajoutée dans une version future.
+
+**Preuves possibles :**
+- chemin du fichier Compose ;
+- noms des services retenus ;
+- chemins des Dockerfiles ;
+- dépôt concerné.
+
+---
+
+## 3. Catégorie Containerization & DevOps
+
+### Docker Starter
+
+**Niveau :** Starter  
+**Objectif :** Conteneuriser un premier projet avec Docker et réussir la construction de son image.
+
+**Critères de détection :**
+
+1. Un dépôt éligible contient au moins un `Dockerfile`.
+2. Le dépôt contient un workflow GitHub Actions qui construit une image Docker.
+3. Le workflow a au moins une exécution réussie.
+4. Metal vérifie, dans la mesure du possible, que le workflow exécute effectivement une étape de construction Docker — par exemple `docker build` ou une action dédiée telle que `docker/build-push-action`.
+
+**Pourquoi ne pas vérifier uniquement la présence du Dockerfile ?**
+
+Un Dockerfile peut exister sans être valide ni permettre de construire une image. En associant sa présence à une étape de build réussie dans GitHub Actions, Metal vérifie une réalisation technique plus concrète.
+
+**Preuves possibles :**
+- chemin du Dockerfile ;
+- fichier de workflow concerné ;
+- identifiant de l'exécution réussie ;
+- date de cette exécution.
+
+---
+
+## 4. Catalogue initial des badges Metal
+
+| Catégorie | Badge | Niveau | Objectif |
+|---|---|---|---|
+| CI/CD & Automation | **First CI/CD** | Starter | Première exécution réussie d'un workflow GitHub Actions |
+| CI/CD & Automation | **CI/CD Explorer** | Advanced | Trois workflows distincts ayant chacun au moins une exécution réussie |
+| Distributed Systems & Architecture | **Microservices Builder** | Advanced | Trois services applicatifs identifiables dans une architecture déclarée |
+| Containerization & DevOps | **Docker Starter** | Starter | Premier projet conteneurisé avec une image Docker construite avec succès |
+
+Ce catalogue constitue le périmètre initial proposé. De nouveaux badges et catégories pourront être ajoutés progressivement.
+
+---
+
+## 5. Architecture du moteur d'analyse
+
+Pour éviter d'implémenter chaque badge sous la forme d'une succession de conditions `if/else`, Metal doit disposer d'un moteur d'analyse organisé autour de responsabilités distinctes.
+
+### Vue d'ensemble
+
+```text
+                    GitHub API
+                        |
+                        v
+               GitHub Data Collector
+                        |
+                        v
+                Repository Analyzer
+                        |
+             +----------+----------+
+             |          |          |
+             v          v          v
+          CI/CD      Docker    Architecture
+          Analyzer   Analyzer  Analyzer
+             |          |          |
+             +----------+----------+
+                        |
+                        v
+                Achievement Engine
+                        |
+                        v
+                    PostgreSQL
+```
+
+### Responsabilités des analyseurs
+
+| Analyseur | Responsabilité |
+|---|---|
+| `CICDAnalyzer` | Examiner les workflows GitHub Actions et leurs exécutions |
+| `DockerAnalyzer` | Détecter les Dockerfiles et vérifier les étapes de construction d'images |
+| `ArchitectureAnalyzer` | Examiner les fichiers Compose, les services applicatifs et leurs configurations |
+| `GitActivityAnalyzer` | Examiner les commits, Pull Requests et reviews |
+
+### Rôle de l'Achievement Engine
+
+Les analyseurs ne doivent pas attribuer directement les badges. Ils collectent et interprètent les éléments techniques, puis transmettent leurs résultats au moteur d'achievements.
+
+L'`AchievementEngine` :
+1. reçoit les résultats des analyseurs ;
+2. les compare aux critères définis pour chaque badge ;
+3. vérifie si l'utilisateur remplit les conditions ;
+4. évite d'attribuer plusieurs fois le même badge ;
+5. enregistre les achievements obtenus dans PostgreSQL, avec les preuves utiles.
+
+Cette séparation permettra d'ajouter de nouvelles catégories et de nouveaux badges sans transformer le backend en une succession de conditions spécifiques.
+
+---
+
+## 6. Principes de conception et limites de la V1
+
+### Des critères vérifiables
+
+Chaque badge doit reposer sur des éléments observables et vérifiables : fichiers, configurations, workflows, exécutions ou événements GitHub.
+
+### Des preuves associées aux badges
+
+Metal devrait conserver les références utiles qui justifient une attribution : dépôt, fichier, workflow, exécution et date, selon le type de badge. Il n'est pas nécessaire de conserver toutes les réponses brutes de l'API GitHub.
+
+### Une règle d'éligibilité des dépôts
+
+Un dépôt simplement visible par l'utilisateur ne doit pas automatiquement être considéré comme son projet. Metal doit définir une règle d'éligibilité fondée sur une contribution identifiable ou un rôle approprié dans le dépôt.
+
+### Une détection prudente
+
+La présence d'un fichier ou d'une configuration ne prouve pas toujours qu'une pratique technique est réellement maîtrisée. Les badges de la V1 doivent donc annoncer précisément ce que Metal a détecté, sans prétendre évaluer des compétences que les données disponibles ne permettent pas de vérifier.
+
+### Une architecture extensible
+
+Chaque analyseur doit avoir une responsabilité ciblée. Le moteur d'achievements doit pouvoir évaluer les résultats de plusieurs analyseurs et appliquer les critères correspondants.
+
+---
+
+## 7. Vision du produit
+
+Metal ne doit pas être uniquement une plateforme qui récompense l'activité GitHub. Il doit progressivement devenir un outil capable d'analyser les pratiques et les réalisations techniques d'un développeur à partir de preuves présentes dans ses projets.
+
+La V1 établira les fondations de cette approche avec des critères déterministes et explicables. Les versions futures pourront enrichir les analyses, introduire de nouveaux types de preuves et proposer des indicateurs plus avancés, tout en conservant une règle essentielle : chaque achievement doit être justifié par des éléments observables.
 
 ## Sommaire
 
