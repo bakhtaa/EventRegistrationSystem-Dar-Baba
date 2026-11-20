@@ -1,100 +1,141 @@
-require('dotenv').config()
-const express = require('express')
-const mongoose = require('mongoose')
-const cors = require('cors')
-const QRCode = require('qrcode')
 
-const Submission = require('./models/Submission')
-const generatePdfFromHtml = require('./services/pdfService')
-const sendMail = require('./utils/mailer')
+require('dotenv').config();
 
-const app = express()
+const express = require('express');
+const mongoose = require('mongoose');
+const QRCode = require('qrcode');
+const cors = require('cors');
+
+const Submission = require('./models/Submission');
+const generatePdfFromHtml = require('./services/pdfService');
+const sendMail = require('./utils/mailer');
+
+const app = express();
 
 // Middleware
-const cors = require('cors')
 app.use(cors({
-    origin: 'https://adil-event-registration.vercel.app',
-    methods: ['POST', 'GET'],
-  }))
-app.use(express.json({ limit: '50mb' })) // handle larger payloads
-app.use(express.urlencoded({ extended: true, limit: '50mb' }))
+  origin: 'https://adil-event-registration.vercel.app',
+  methods: ['POST', 'GET'],
+}));
 
-
-// DB Connection
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch((err) => console.log(err))
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // POST /submit
 app.post('/submit', async (req, res) => {
-  const { name, email, phone, eventName, eventVenue, eventTime } = req.body
-  const formId = Math.floor(Math.random() * 900000 + 100000).toString()
+  try {
+    const {
+      name,
+      email,
+      phone,
+      eventName,
+      eventVenue,
+      eventTime
+    } = req.body;
 
-  const qrData = {
-    name,
-    email,
-    phone,
-    eventName,
-    eventVenue,
-    eventTime,
-    formId,
-  }
-  const qrCode = await QRCode.toDataURL(JSON.stringify(qrData))
+    const formId = Math.floor(Math.random() * 900000 + 100000).toString();
 
-  const submission = new Submission({
-    name,
-    email,
-    phone,
-    eventName,
-    eventVenue,
-    eventTime,
-    qrCode,
-    formId,
-  })
+    const qrData = {
+      name,
+      email,
+      phone,
+      eventName,
+      eventVenue,
+      eventTime,
+      formId,
+    };
 
-  await submission.save()
+    const qrCode = await QRCode.toDataURL(JSON.stringify(qrData));
 
-  // Generate PDF HTML
- const html = `
-  <div style="font-family: 'Segoe UI', sans-serif; padding: 40px; color: #333;">
-    <div style="text-align: center; margin-bottom: 30px;">
-      <img src="https://res.cloudinary.com/dr5kn8993/image/upload/v1744981658/My%20Images/banner_rkvild.png" alt="Event Banner" style="max-width: 100%; margin-top: 20px; border-radius: 8px;" />
-    </div>
+    const submission = new Submission({
+      name,
+      email,
+      phone,
+      eventName,
+      eventVenue,
+      eventTime,
+      qrCode,
+      formId,
+    });
 
-    <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-      <h2 style="text-align: center; color: #222; margin-bottom: 25px;">🎉 Event Registration</h2>
-      <p><strong>Name:</strong> ${name}</p>
-      <p><strong>Email:</strong> ${email}</p>
-      <p><strong>Phone:</strong> ${phone}</p>
-      <p><strong>Event:</strong> ${eventName}</p>
-      <p><strong>Venue:</strong> ${eventVenue}</p>
-      <p><strong>Time:</strong> ${eventTime}</p>
-      <p><strong>Form ID:</strong> ${formId}</p>
+    await submission.save();
 
-      <div style="text-align: center; margin-top: 30px;">
-        <h4 style="margin-bottom: 10px;">Your QR Code</h4>
-        <img src="${qrCode}" width="250" height="250" style="border: 4px solid #333; border-radius: 8px;" />
+    // Generate PDF HTML
+    const html = `
+      <div style="font-family: 'Segoe UI', sans-serif; padding: 40px; color: #333;">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <img
+            src="https://res.cloudinary.com/dr5kn8993/image/upload/v1744981658/My%20Images/banner_rkvild.png"
+            alt="Event Banner"
+            style="max-width: 100%; margin-top: 20px; border-radius: 8px;"
+          />
+        </div>
+
+        <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+          <h2 style="text-align: center; color: #222; margin-bottom: 25px;">
+            🎉 Event Registration
+          </h2>
+
+          <p><strong>Name:</strong> ${name}</p>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Phone:</strong> ${phone}</p>
+          <p><strong>Event:</strong> ${eventName}</p>
+          <p><strong>Venue:</strong> ${eventVenue}</p>
+          <p><strong>Time:</strong> ${eventTime}</p>
+          <p><strong>Form ID:</strong> ${formId}</p>
+
+          <div style="text-align: center; margin-top: 30px;">
+            <h4 style="margin-bottom: 10px;">Your QR Code</h4>
+            <img
+              src="${qrCode}"
+              width="250"
+              height="250"
+              style="border: 4px solid #333; border-radius: 8px;"
+            />
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
-`
+    `;
 
+    const pdfBuffer = await generatePdfFromHtml(html);
 
+    await sendMail(
+      email,
+      'Event Registration Confirmation',
+      'See attached PDF.',
+      [{
+        filename: 'registration.pdf',
+        content: pdfBuffer
+      }]
+    );
 
+    res.json({ message: 'Form submitted successfully!' });
 
-  const pdfBuffer = await generatePdfFromHtml(html)
+  } catch (error) {
+    console.error('Submission error:', error);
+    res.status(500).json({
+      message: 'An error occurred while processing the submission.'
+    });
+  }
+});
 
-  await sendMail(
-    email,
-    'Event Registration Confirmation',
-    'See attached PDF.',
-    [{ filename: 'registration.pdf', content: pdfBuffer }]
-  )
+// Start server only after MongoDB connection
+const PORT = process.env.PORT || 5000;
 
-  res.json({ message: 'Form submitted successfully!' })
-})
+async function startServer() {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI);
 
-// Start server
-const PORT = process.env.PORT || 5000
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`))
+    console.log('MongoDB connected successfully');
+
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+
+  } catch (error) {
+    console.error('MongoDB connection failed:', error.message);
+    process.exit(1);
+  }
+}
+
+startServer();
